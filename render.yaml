@@ -52,7 +52,7 @@ services:
         fromService:
           type: web
           name: inventra-ai
-          property: url
+          property: hostport
       - key: AI_SERVICE_API_KEY
         sync: false # Set manually
       - key: GEMINI_API_KEY
@@ -97,8 +97,7 @@ services:
         fromService:
           type: web
           name: inventra-backend
-          property: url
-          envVarKey: NEXT_PUBLIC_API_URL # This might need manual suffix /api/v1
+          property: hostport
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
