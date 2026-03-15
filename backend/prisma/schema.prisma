@@ -1,0 +1,661 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventra — Prisma Schema
+// PostgreSQL (Supabase-compatible) with pgvector extension
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [pgvector(map: "vector", schema: "extensions"), uuidOssp(map: "uuid-ossp", schema: "extensions")]
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum MovementType {
+  purchase
+  sale
+  adjustment
+  return
+  transfer_in
+  transfer_out
+  waste
+  opening_stock
+}
+
+enum ReferenceType {
+  sale
+  purchase_order
+  manual
+  return
+  expense
+  supplier
+}
+
+enum PaymentMethod {
+  cash
+  card
+  bank_transfer
+  mobile_payment
+  credit
+}
+
+enum PaymentStatus {
+  paid
+  partial
+  unpaid
+}
+
+enum SaleStatus {
+  completed
+  voided
+  refunded
+}
+
+enum EventDirection {
+  inflow
+  outflow
+}
+
+enum CashflowEventType {
+  sale_revenue
+  expense_payment
+  loan_receipt
+  owner_withdrawal
+  refund
+  tax_payment
+  inventory_purchase
+  other
+}
+
+enum DocumentType {
+  invoice
+  receipt
+  contract
+  report
+  other
+}
+
+enum DocumentProcessingStatus {
+  pending
+  processing
+  processed
+  failed
+}
+
+enum RecommendationType {
+  restock
+  reduce_order
+  promote
+  discontinue
+  pricing_adjustment
+}
+
+enum RecommendationPriority {
+  high
+  medium
+  low
+}
+
+enum RecommendationStatus {
+  pending
+  acknowledged
+  acted_on
+  dismissed
+}
+
+enum NotificationType {
+  low_stock_alert
+  new_recommendation
+  document_processed
+  cashflow_alert
+  forecast_ready
+  general
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PLATFORM LAYER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Root entity. Every business using Inventra has one row here.
+model Business {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name      String   @db.VarChar(255)
+  slug      String   @unique @db.VarChar(100)
+  email     String   @unique @db.VarChar(255)
+  phone     String?  @db.VarChar(50)
+  address   String?  @db.Text
+  country   String   @db.VarChar(100)
+  currency  String   @default("USD") @db.VarChar(10)
+  timezone  String   @default("UTC") @db.VarChar(100)
+  logoUrl   String?  @map("logo_url") @db.Text
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  users                 User[]
+  branches              Branch[]
+  categories            Category[]
+  suppliers             Supplier[]
+  products              Product[]
+  productSupplierPrices ProductSupplierPrice[]
+  inventoryMovements    InventoryMovement[]
+  customers             Customer[]
+  sales                 Sale[]
+  saleItems             SaleItem[]
+  expenses              Expense[]
+  cashflowEvents        CashflowEvent[]
+  forecasts             Forecast[]
+  recommendations       Recommendation[]
+  documents             Document[]
+  documentChunks        DocumentChunk[]
+  notifications         Notification[]
+  settings              Settings?
+
+  @@map("businesses")
+}
+
+/// Individual users who manage a business. One user belongs to exactly one business.
+model User {
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId   String    @map("business_id") @db.Uuid
+  email        String    @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.Text
+  fullName     String    @map("full_name") @db.VarChar(255)
+  avatarUrl    String?   @map("avatar_url") @db.Text
+  isOwner      Boolean   @default(false) @map("is_owner")
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business           Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  salesCreated       Sale[]              @relation("SaleCreatedBy")
+  expensesCreated    Expense[]           @relation("ExpenseCreatedBy")
+  movementsCreated   InventoryMovement[] @relation("MovementCreatedBy")
+  cashflowCreated    CashflowEvent[]     @relation("CashflowCreatedBy")
+  documentsUploaded  Document[]          @relation("DocumentUploadedBy")
+  notifications      Notification[]
+
+  @@unique([businessId, email])
+  @@index([businessId])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERATIONS LAYER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Physical store locations or warehouses belonging to a business.
+model Branch {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  name       String   @db.VarChar(255)
+  address    String?  @db.Text
+  phone      String?  @db.VarChar(50)
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business           Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  inventoryMovements InventoryMovement[]
+  sales              Sale[]
+  expenses           Expense[]
+  cashflowEvents     CashflowEvent[]
+  forecasts          Forecast[]
+  recommendations    Recommendation[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+  @@map("branches")
+}
+
+/// Product categories with optional parent for subcategory nesting.
+model Category {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  parentId    String?  @map("parent_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business  Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  parent    Category?  @relation("CategoryChildren", fields: [parentId], references: [id])
+  children  Category[] @relation("CategoryChildren")
+  products  Product[]
+
+  @@unique([businessId, name, parentId])
+  @@index([businessId])
+  @@index([parentId])
+  @@map("categories")
+}
+
+/// Vendors/suppliers from whom the business purchases inventory.
+model Supplier {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId  String   @map("business_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  contactName String?  @map("contact_name") @db.VarChar(255)
+  email       String?  @db.VarChar(255)
+  phone       String?  @db.VarChar(50)
+  address     String?  @db.Text
+  notes       String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business              Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  products              Product[]
+  inventoryMovements    InventoryMovement[]
+  productSupplierPrices ProductSupplierPrice[]
+
+  @@index([businessId])
+  @@map("suppliers")
+}
+
+/// The product catalog. Stock levels are NOT stored here — computed from inventory_movements.
+model Product {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId      String   @map("business_id") @db.Uuid
+  categoryId      String?  @map("category_id") @db.Uuid
+  supplierId      String?  @map("supplier_id") @db.Uuid
+  name            String   @db.VarChar(255)
+  description     String?  @db.Text
+  sku             String   @db.VarChar(100)
+  barcode         String?  @db.VarChar(100)
+  unit            String   @default("pcs") @db.VarChar(50)
+  costPrice       Decimal  @default(0) @map("cost_price") @db.Decimal(12, 2)
+  sellingPrice    Decimal  @default(0) @map("selling_price") @db.Decimal(12, 2)
+  reorderPoint    Int      @default(0) @map("reorder_point")
+  reorderQuantity Int      @default(0) @map("reorder_quantity")
+  isActive        Boolean  @default(true) @map("is_active")
+  imageUrl        String?  @map("image_url") @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business              Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category              Category?              @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  supplier              Supplier?              @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  inventoryMovements    InventoryMovement[]
+  saleItems             SaleItem[]
+  forecasts             Forecast[]
+  recommendations       Recommendation[]
+  productSupplierPrices ProductSupplierPrice[]
+
+  @@unique([businessId, sku])
+  @@index([businessId])
+  @@index([categoryId])
+  @@map("products")
+}
+
+/// Multi-supplier pricing. A product can be sourced from multiple suppliers at different costs.
+model ProductSupplierPrice {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId      String   @map("business_id") @db.Uuid
+  productId       String   @map("product_id") @db.Uuid
+  supplierId      String   @map("supplier_id") @db.Uuid
+  unitCost        Decimal  @map("unit_cost") @db.Decimal(12, 2)
+  leadTimeDays    Int?     @map("lead_time_days")
+  minimumOrderQty Int?     @map("minimum_order_qty")
+  isPreferred     Boolean  @default(false) @map("is_preferred")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+  @@index([businessId, productId])
+  @@map("product_supplier_prices")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVENTORY LAYER — Event-based ledger
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Append-only inventory ledger. Every stock change is a row here.
+/// Current stock = SUM(quantity_delta) for a given product + branch.
+model InventoryMovement {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId    String        @map("business_id") @db.Uuid
+  productId     String        @map("product_id") @db.Uuid
+  branchId      String?       @map("branch_id") @db.Uuid
+  movementType  MovementType  @map("movement_type")
+  /// Positive = stock in, Negative = stock out
+  quantityDelta Decimal       @map("quantity_delta") @db.Decimal(12, 3)
+  unitCost      Decimal?      @map("unit_cost") @db.Decimal(12, 2)
+  referenceType ReferenceType? @map("reference_type")
+  referenceId   String?       @map("reference_id") @db.Uuid
+  supplierId    String?       @map("supplier_id") @db.Uuid
+  notes         String?       @db.Text
+  createdBy     String        @map("created_by") @db.Uuid
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  branch   Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  supplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  user     User      @relation("MovementCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([businessId, productId])
+  @@index([businessId, productId, branchId])
+  @@index([businessId, createdAt])
+  @@index([referenceType, referenceId])
+  @@map("inventory_movements")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SALES & FINANCE LAYER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Customer profiles. Optional — sales can be anonymous.
+model Customer {
+  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId     String    @map("business_id") @db.Uuid
+  fullName       String    @map("full_name") @db.VarChar(255)
+  email          String?   @db.VarChar(255)
+  phone          String?   @db.VarChar(50)
+  address        String?   @db.Text
+  notes          String?   @db.Text
+  tags           String[]  @default([])
+  /// Denormalized for fast dashboard sorting. Ground truth is in sales table.
+  totalSpent     Decimal   @default(0) @map("total_spent") @db.Decimal(14, 2)
+  lastPurchaseAt DateTime? @map("last_purchase_at") @db.Timestamptz
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sales    Sale[]
+
+  @@index([businessId])
+  @@index([businessId, lastPurchaseAt])
+  @@map("customers")
+}
+
+/// Sales transaction header. Groups one or more sale_items.
+model Sale {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId    String        @map("business_id") @db.Uuid
+  branchId      String?       @map("branch_id") @db.Uuid
+  customerId    String?       @map("customer_id") @db.Uuid
+  createdBy     String        @map("created_by") @db.Uuid
+  saleDate      DateTime      @map("sale_date") @db.Date
+  subtotal      Decimal       @db.Decimal(12, 2)
+  discountAmount Decimal      @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  taxAmount     Decimal       @default(0) @map("tax_amount") @db.Decimal(12, 2)
+  totalAmount   Decimal       @map("total_amount") @db.Decimal(12, 2)
+  paymentMethod PaymentMethod @map("payment_method")
+  paymentStatus PaymentStatus @default(paid) @map("payment_status")
+  amountPaid    Decimal       @map("amount_paid") @db.Decimal(12, 2)
+  notes         String?       @db.Text
+  status        SaleStatus    @default(completed)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business  Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch    Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  customer  Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdByUser User   @relation("SaleCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+  items     SaleItem[]
+
+  @@index([businessId, saleDate])
+  @@index([businessId, customerId])
+  @@index([businessId, branchId, saleDate])
+  @@map("sales")
+}
+
+/// Individual line items within a sale.
+model SaleItem {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  saleId         String   @map("sale_id") @db.Uuid
+  businessId     String   @map("business_id") @db.Uuid
+  productId      String   @map("product_id") @db.Uuid
+  quantity       Decimal  @db.Decimal(12, 3)
+  unitPrice      Decimal  @map("unit_price") @db.Decimal(12, 2)
+  unitCost       Decimal  @map("unit_cost") @db.Decimal(12, 2)
+  discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  totalPrice     Decimal  @map("total_price") @db.Decimal(12, 2)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  sale     Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([saleId])
+  @@index([businessId, productId])
+  @@index([businessId, createdAt])
+  @@map("sale_items")
+}
+
+/// Business operating expenses (rent, utilities, salaries, etc.)
+model Expense {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId    String   @map("business_id") @db.Uuid
+  branchId      String?  @map("branch_id") @db.Uuid
+  createdBy     String   @map("created_by") @db.Uuid
+  category      String   @db.VarChar(100)
+  description   String?  @db.Text
+  amount        Decimal  @db.Decimal(12, 2)
+  expenseDate   DateTime @map("expense_date") @db.Date
+  paymentMethod String?  @map("payment_method") @db.VarChar(50)
+  receiptUrl    String?  @map("receipt_url") @db.Text
+  notes         String?  @db.Text
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  user     User     @relation("ExpenseCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([businessId, expenseDate])
+  @@index([businessId, category])
+  @@map("expenses")
+}
+
+/// Unified cashflow ledger. Records actual cash movements (not just accruals).
+model CashflowEvent {
+  id            String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId    String            @map("business_id") @db.Uuid
+  branchId      String?           @map("branch_id") @db.Uuid
+  eventType     CashflowEventType @map("event_type")
+  direction     EventDirection
+  amount        Decimal           @db.Decimal(12, 2)
+  referenceType String?           @map("reference_type") @db.VarChar(50)
+  referenceId   String?           @map("reference_id") @db.Uuid
+  description   String?           @db.Text
+  eventDate     DateTime          @map("event_date") @db.Date
+  createdBy     String            @map("created_by") @db.Uuid
+  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch?  @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  user     User     @relation("CashflowCreatedBy", fields: [createdBy], references: [id], onDelete: Restrict)
+
+  @@index([businessId, eventDate])
+  @@index([businessId, direction, eventDate])
+  @@map("cashflow_events")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI & ANALYTICS LAYER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// AI-generated demand forecasts per product and optional branch.
+model Forecast {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId          String   @map("business_id") @db.Uuid
+  productId           String   @map("product_id") @db.Uuid
+  branchId            String?  @map("branch_id") @db.Uuid
+  forecastPeriodStart DateTime @map("forecast_period_start") @db.Date
+  forecastPeriodEnd   DateTime @map("forecast_period_end") @db.Date
+  predictedDemand     Decimal  @map("predicted_demand") @db.Decimal(12, 3)
+  confidenceScore     Decimal? @map("confidence_score") @db.Decimal(5, 4)
+  modelVersion        String?  @map("model_version") @db.VarChar(100)
+  /// Full structured model output: daily breakdowns, confidence intervals, feature importances
+  forecastData        Json?    @map("forecast_data")
+  generatedAt         DateTime @map("generated_at") @db.Timestamptz
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business        Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch          Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  recommendations Recommendation[]
+
+  @@index([businessId, productId])
+  @@index([businessId, forecastPeriodStart])
+  @@map("forecasts")
+}
+
+/// Actionable AI recommendations derived from forecasts and inventory analysis.
+model Recommendation {
+  id                  String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId          String                 @map("business_id") @db.Uuid
+  productId           String?                @map("product_id") @db.Uuid
+  branchId            String?                @map("branch_id") @db.Uuid
+  forecastId          String?                @map("forecast_id") @db.Uuid
+  recommendationType  RecommendationType     @map("recommendation_type")
+  title               String                 @db.VarChar(255)
+  body                String                 @db.Text
+  priority            RecommendationPriority @default(medium)
+  suggestedQuantity   Decimal?               @map("suggested_quantity") @db.Decimal(12, 3)
+  suggestedActionBy   DateTime?              @map("suggested_action_by") @db.Date
+  status              RecommendationStatus   @default(pending)
+  metadata            Json?
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch   Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  forecast Forecast? @relation(fields: [forecastId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, status])
+  @@index([businessId, productId])
+  @@map("recommendations")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DOCUMENT & RAG LAYER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Document upload metadata. Binary files live in object storage (Supabase Storage).
+model Document {
+  id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId       String                   @map("business_id") @db.Uuid
+  uploadedBy       String                   @map("uploaded_by") @db.Uuid
+  fileName         String                   @map("file_name") @db.VarChar(255)
+  fileType         String                   @map("file_type") @db.VarChar(50)
+  fileSizeBytes    BigInt                   @map("file_size_bytes")
+  storageUrl       String                   @map("storage_url") @db.Text
+  documentType     DocumentType             @map("document_type")
+  referenceType    String?                  @map("reference_type") @db.VarChar(50)
+  referenceId      String?                  @map("reference_id") @db.Uuid
+  processingStatus DocumentProcessingStatus @default(pending) @map("processing_status")
+  /// Raw text extracted from the document (OCR or PDF parse) for RAG chunking
+  extractedText    String?                  @map("extracted_text") @db.Text
+  notes            String?                  @db.Text
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  uploader User            @relation("DocumentUploadedBy", fields: [uploadedBy], references: [id], onDelete: Restrict)
+  chunks   DocumentChunk[]
+
+  @@index([businessId])
+  @@index([businessId, documentType])
+  @@index([referenceType, referenceId])
+  @@map("documents")
+}
+
+/// Text chunks from documents with vector embeddings for semantic (RAG) search.
+model DocumentChunk {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId String   @map("business_id") @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  chunkIndex Int      @map("chunk_index")
+  chunkText  String   @map("chunk_text") @db.Text
+  /// pgvector embedding — 1536 dimensions (OpenAI text-embedding-3-small)
+  /// Use: SELECT ... ORDER BY embedding <=> $vector LIMIT 5 WHERE business_id = $id
+  embedding  Unsupported("vector(1536)")?
+  tokenCount Int?     @map("token_count")
+  /// Arbitrary metadata: page number, section heading, source type, etc.
+  metadata   Json?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, documentId])
+  @@map("document_chunks")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SUPPORT LAYER
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// In-app notifications for business users.
+model Notification {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId    String           @map("business_id") @db.Uuid
+  userId        String?          @map("user_id") @db.Uuid
+  type          NotificationType
+  title         String           @db.VarChar(255)
+  body          String           @db.Text
+  isRead        Boolean          @default(false) @map("is_read")
+  referenceType String?          @map("reference_type") @db.VarChar(50)
+  referenceId   String?          @map("reference_id") @db.Uuid
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, userId, isRead])
+  @@map("notifications")
+}
+
+/// Per-business configuration and feature flags. One row per business.
+model Settings {
+  id                        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  businessId                String   @unique @map("business_id") @db.Uuid
+  lowStockThresholdDefault  Int      @default(10) @map("low_stock_threshold_default")
+  defaultTaxRate            Decimal  @default(0) @map("default_tax_rate") @db.Decimal(5, 2)
+  fiscalYearStartMonth      Int      @default(1) @map("fiscal_year_start_month")
+  enableDemandForecasting   Boolean  @default(true) @map("enable_demand_forecasting")
+  enableCustomerAnalytics   Boolean  @default(true) @map("enable_customer_analytics")
+  forecastHorizonDays       Int      @default(30) @map("forecast_horizon_days")
+  aiModelPreference         String?  @map("ai_model_preference") @db.VarChar(100)
+  /// Per-channel notification toggles: email, in-app, SMS per event type
+  notificationPreferences   Json     @default("{}") @map("notification_preferences")
+  /// Escape hatch for future business-specific config
+  customSettings            Json     @default("{}") @map("custom_settings")
+  createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  // Relations
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("settings")
+}

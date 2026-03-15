@@ -1,0 +1,102 @@
+# Render Blueprint
+# This file can be used to deploy the entire Inventra stack on Render.
+# Simply create a new "Blueprint Instance" in Render Dashboard and select this repo.
+
+services:
+  # --------------------------------------------------------------------------------
+  # 1. DATABASE (Managed PostgreSQL)
+  # --------------------------------------------------------------------------------
+  - type: psql
+    name: inventra-db
+    region: oregon # or your preferred region
+    plan: free # or starter / standard
+    databaseName: inventra
+    user: inventra_user
+    ipAllowList: [] # Allow all internal connections
+
+  # --------------------------------------------------------------------------------
+  # 2. BACKEND (Express + Prisma)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: inventra-backend
+    region: oregon
+    runtime: node
+    buildCommand: npm install && npm run build --workspace=backend
+    startCommand: npx prisma migrate deploy --schema=backend/prisma/schema.prisma && npm start --workspace=backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inventra-db
+          property: connectionString
+      - key: DIRECT_URL
+        fromDatabase:
+          name: inventra-db
+          property: connectionString
+      - key: PORT
+        value: 4000
+      - key: CORS_ORIGIN
+        value: https://inventra-frontend.onrender.com # Update after frontend is created
+      # Secrets (Set these in Dashboard manually later if needed, or use sync: false)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: inventra-ai
+          property: url
+      - key: AI_SERVICE_API_KEY
+        sync: false # Set manually
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # 3. AI SERVICE (Express + OpenAI)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: inventra-ai
+    region: oregon
+    runtime: node
+    buildCommand: npm install && npm run build --workspace=ai-service
+    startCommand: npm start --workspace=ai-service
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inventra-db
+          property: connectionString
+      - key: API_KEY
+        sync: false # Must match AI_SERVICE_API_KEY in backend
+      - key: OPENAI_API_KEY
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # 4. FRONTEND (Next.js)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: inventra-frontend
+    region: oregon
+    runtime: node
+    buildCommand: npm install && npm run build --workspace=frontend
+    startCommand: npm start --workspace=frontend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: inventra-backend
+          property: url
+          envVarKey: NEXT_PUBLIC_API_URL # This might need manual suffix /api/v1
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
