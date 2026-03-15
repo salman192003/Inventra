@@ -2,20 +2,9 @@
 # This file can be used to deploy the entire Inventra stack on Render.
 # Simply create a new "Blueprint Instance" in Render Dashboard and select this repo.
 
-databases:
-  # --------------------------------------------------------------------------------
-  # 1. DATABASE (Managed PostgreSQL)
-  # --------------------------------------------------------------------------------
-  - name: inventra-db
-    region: oregon # or your preferred region
-    plan: free
-    databaseName: inventra
-    user: inventra_user
-    ipAllowList: [] # Allow all internal connections
-
 services:
   # --------------------------------------------------------------------------------
-  # 2. BACKEND (Express + Prisma)
+  # 1. BACKEND (Express + Prisma)
   # --------------------------------------------------------------------------------
   - type: web
     name: inventra-backend
@@ -28,13 +17,9 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: inventra-db
-          property: connectionString
+        value: postgresql://postgres.bapjpnvndyfvsbhfrpyy:LZ%23%3FFka%2BC_Yr8%2Aj@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
       - key: DIRECT_URL
-        fromDatabase:
-          name: inventra-db
-          property: connectionString
+        value: postgresql://postgres.bapjpnvndyfvsbhfrpyy:LZ%23%3FFka%2BC_Yr8%2Aj@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres
       - key: PORT
         value: 4000
       - key: CORS_ORIGIN
@@ -59,7 +44,7 @@ services:
         sync: false
 
   # --------------------------------------------------------------------------------
-  # 3. AI SERVICE (Express + OpenAI)
+  # 2. AI SERVICE (Express + OpenAI)
   # --------------------------------------------------------------------------------
   - type: web
     name: inventra-ai
@@ -72,16 +57,14 @@ services:
       - key: NODE_ENV
         value: production
       - key: DATABASE_URL
-        fromDatabase:
-          name: inventra-db
-          property: connectionString
+        value: postgresql://postgres.bapjpnvndyfvsbhfrpyy:LZ%23%3FFka%2BC_Yr8%2Aj@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
       - key: API_KEY
         sync: false # Must match AI_SERVICE_API_KEY in backend
       - key: OPENAI_API_KEY
         sync: false
 
   # --------------------------------------------------------------------------------
-  # 4. FRONTEND (Next.js)
+  # 3. FRONTEND (Next.js)
   # --------------------------------------------------------------------------------
   - type: web
     name: inventra-frontend
