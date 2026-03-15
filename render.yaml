@@ -9,7 +9,7 @@ services:
   - type: psql
     name: inventra-db
     region: oregon # or your preferred region
-    plan: free # or starter / standard
+    plan: free
     databaseName: inventra
     user: inventra_user
     ipAllowList: [] # Allow all internal connections
@@ -20,6 +20,7 @@ services:
   - type: web
     name: inventra-backend
     region: oregon
+    plan: free
     runtime: node
     buildCommand: npm install && npm run build --workspace=backend
     startCommand: npx prisma migrate deploy --schema=backend/prisma/schema.prisma && npm start --workspace=backend
@@ -63,6 +64,7 @@ services:
   - type: web
     name: inventra-ai
     region: oregon
+    plan: free
     runtime: node
     buildCommand: npm install && npm run build --workspace=ai-service
     startCommand: npm start --workspace=ai-service
@@ -84,6 +86,7 @@ services:
   - type: web
     name: inventra-frontend
     region: oregon
+    plan: free
     runtime: node
     buildCommand: npm install && npm run build --workspace=frontend
     startCommand: npm start --workspace=frontend
