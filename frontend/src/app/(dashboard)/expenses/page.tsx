@@ -51,28 +51,27 @@ export default function ExpensesPage() {
             data={filteredExpenses as unknown as Record<string, unknown>[]}
             columns={[
               {
-                header: 'Date',
-                accessor: 'expenseDate',
-                cell: (row: Record<string, unknown>) => new Date(row.expenseDate as string).toLocaleDateString(),
+                label: 'Date',
+                key: 'expenseDate',
+                render: (row: Record<string, unknown>) => new Date(row.expenseDate as string).toLocaleDateString(),
               },
-              { header: 'Category', accessor: 'category' },
+              { label: 'Category', key: 'category' },
               {
-                header: 'Amount',
-                accessor: 'amount',
-                cell: (row: Record<string, unknown>) => `$${Number(row.amount).toLocaleString()}`,
+                label: 'Amount',
+                key: 'amount',
+                render: (row: Record<string, unknown>) => `$${Number(row.amount).toLocaleString()}`,
               },
               {
-                header: 'Status',
-                accessor: 'status',
-                cell: (row: Record<string, unknown>) => (
+                label: 'Status',
+                key: 'status',
+                render: (row: Record<string, unknown>) => (
                   <Badge variant={row.status === 'PAID' ? 'success' : 'warning'}>
                     {row.status as string}
                   </Badge>
                 ),
               },
-              { header: 'Reference', accessor: 'reference' },
+              { label: 'Reference', key: 'reference' },
             ]}
-            isLoading={expensesLoading}
           />
         </div>
       </main>
