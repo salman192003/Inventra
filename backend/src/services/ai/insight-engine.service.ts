@@ -107,7 +107,7 @@ export const insightEngineService = {
     console.log("Asking Gemini 1.5 Pro for Insights formulation...");
 
     const { object } = await generateObject({
-      model: google('gemini-2.5-flash'),
+      model: google('gemini-1.5-pro-latest'), // Use a stable model string
       schema: z.object({
         recommendations: z.array(z.object({
           productId: z.string().uuid(),
@@ -117,13 +117,8 @@ export const insightEngineService = {
           priority: z.enum(['high', 'medium', 'low']),
           suggestedQuantity: z.number().optional().describe("If restocking, exact number to order based on demand and lead time")
         }))
-      }),
-      prompt: `You are the Intelligence Engine for an Inventory Management System. 
-      Review the following product anomalies which require attention. 
-      Generate precisely formatted, actionable business recommendations for the owner. 
-      Do NOT invent numbers; rely explicitly on the context provided.
-      Current Data Context:
-      ${promptContext}`,
+      }) as any, // Explicitly cast to 'any' to bypass TS2589 infinite recursion
+      prompt: `Analyze these inventory metrics: ${promptContext}. Create actionable business recommendations.`
     });
 
     // 5. Save to database
