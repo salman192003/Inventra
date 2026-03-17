@@ -1,0 +1,85 @@
+services:
+  # --------------------------------------------------------------------------------
+  # 1. BACKEND (Main API - Express + Prisma)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: inventra-backend
+    region: oregon 
+    plan: free
+    runtime: node
+    buildCommand: npm install && npm run build --workspace=backend
+    startCommand: npx prisma migrate deploy --schema=backend/prisma/schema.prisma && npm start --workspace=backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        value: postgresql://postgres.bapjpnvndyfvsbhfrpyy:LZ%23%3FFka%2BC_Yr8%2Aj@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+      - key: DIRECT_URL
+        value: postgresql://postgres.bapjpnvndyfvsbhfrpyy:LZ%23%3FFka%2BC_Yr8%2Aj@aws-1-ap-southeast-1.pooler.supabase.com:5432/postgres
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: "*" # Update to your Vercel frontend URL later (e.g. https://inventra.vercel.app)
+      
+      # Inter-service Communication
+      - key: AI_SERVICE_URL
+        fromService:
+          type: web
+          name: inventra-ai-service
+          property: hostport
+      - key: FORECAST_API_URL
+        fromService:
+          type: web
+          name: inventra-ai-core
+          property: hostport
+      
+      # Secrets (Fill in Dashboard)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: AI_SERVICE_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # 2. AI SERVICE (Node.js - RAG & Logic)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: inventra-ai-service
+    region: oregon
+    plan: free
+    runtime: node
+    buildCommand: npm install && npm run build --workspace=ai-service
+    startCommand: npm start --workspace=ai-service
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        value: postgresql://postgres.bapjpnvndyfvsbhfrpyy:LZ%23%3FFka%2BC_Yr8%2Aj@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true
+      
+      # Secrets (Fill in Dashboard)
+      - key: API_KEY
+        sync: false # Must match AI_SERVICE_API_KEY from backend
+      - key: OPENAI_API_KEY
+        sync: false
+
+  # --------------------------------------------------------------------------------
+  # 3. AI CORE (Python - Forecasting)
+  # --------------------------------------------------------------------------------
+  - type: web
+    name: inventra-ai-core
+    region: oregon
+    plan: free
+    runtime: python
+    rootDir: ai-core
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
