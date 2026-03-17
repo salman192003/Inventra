@@ -10,6 +10,7 @@ import {
   BarChart2,
   Bot,
   Settings,
+  Receipt,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
@@ -17,6 +18,7 @@ const navItems = [
   { label: 'Dashboard',    href: '/dashboard',   icon: LayoutDashboard },
   { label: 'Inventory',    href: '/inventory',   icon: Package },
   { label: 'Sales',        href: '/sales',       icon: ShoppingCart },
+  { label: 'Expenses',     href: '/expenses',    icon: Receipt },
   { label: 'Insights',     href: '/insights',    icon: BarChart2 },
 ];
 

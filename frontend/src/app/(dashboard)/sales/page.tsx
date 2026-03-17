@@ -5,9 +5,8 @@ import Navbar from '@/components/Navbar';
 import ChartCard from '@/components/ChartCard';
 import DataTable from '@/components/DataTable';
 import Badge from '@/components/Badge';
-import { useSales, useExpenses, useCashflowSummary, useCashflowEvents } from '@/hooks/useSales';
+import { useSales, useCashflowSummary, useCashflowEvents } from '@/hooks/useSales';
 import AddSaleModal from '@/components/AddSaleModal';
-import AddExpenseModal from '@/components/AddExpenseModal';
 import SaleDetailModal from '@/components/SaleDetailModal';
 import { Plus, Search } from 'lucide-react';
 import { cn } from '@/lib/cn';
@@ -16,17 +15,14 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 
-type Tab = 'sales' | 'expenses' | 'cashflow';
+type Tab = 'sales' | 'cashflow';
 
 export default function SalesPage() {
   const [tab, setTab] = useState<Tab>('sales');
   const [showAddSale, setShowAddSale] = useState(false);
-  const [showAddExpense, setShowAddExpense] = useState(false);
   const [viewSaleId, setViewSaleId] = useState<string | null>(null);
   const [salesSearch, setSalesSearch] = useState('');
-  const [expenseSearch, setExpenseSearch] = useState('');
   const { data: sales = [], isLoading: salesLoading } = useSales();
-  const { data: expenses = [], isLoading: expensesLoading } = useExpenses();
   const { data: cashflowSummary } = useCashflowSummary();
   const { data: cashflowEvents = [] } = useCashflowEvents();
 
@@ -36,13 +32,6 @@ export default function SalesPage() {
         (s.customer?.fullName ?? '').toLowerCase().includes(salesSearch.toLowerCase())
       )
     : sales;
-
-  const filteredExpenses = expenseSearch
-    ? expenses.filter((e) =>
-        e.category.toLowerCase().includes(expenseSearch.toLowerCase()) ||
-        (e.description ?? '').toLowerCase().includes(expenseSearch.toLowerCase())
-      )
-    : expenses;
 
   const cashflowPoints = (cashflowEvents as unknown as { eventDate: string; amount: number; direction: string }[])
     .reduce((acc: { date: string; inflow: number; outflow: number }[], ev) => {
@@ -59,17 +48,16 @@ export default function SalesPage() {
 
   return (
     <div className="flex flex-col flex-1">
-      <Navbar title="Sales & Finances" subtitle="Sales, expenses, and cashflow overview" />
+      <Navbar title="Sales & Finances" subtitle="Sales and cashflow overview" />
 
       {/* Modals */}
       <AddSaleModal open={showAddSale} onClose={() => setShowAddSale(false)} />
-      <AddExpenseModal open={showAddExpense} onClose={() => setShowAddExpense(false)} />
       <SaleDetailModal saleId={viewSaleId} onClose={() => setViewSaleId(null)} />
 
       <main className="flex-1 p-6 space-y-5 overflow-y-auto">
         {/* Tabs */}
         <div className="flex gap-1 border-b border-slate-100">
-          {(['sales', 'expenses', 'cashflow'] as Tab[]).map((t) => (
+          {(['sales', 'cashflow'] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -315,124 +303,6 @@ export default function SalesPage() {
                   ]}
                   data={filteredSales as unknown as Record<string, unknown>[]}
                   emptyMessage="No sales recorded yet."
-                />
-              )}
-            </div>
-          </>
-        )}
-
-        {/* Expenses Tab */}
-        {tab === 'expenses' && (
-          <>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 w-64">
-                <Search className="w-3.5 h-3.5 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search expenses..."
-                  value={expenseSearch}
-                  onChange={(e) => setExpenseSearch(e.target.value)}
-                  className="text-sm outline-none bg-transparent w-full placeholder-slate-400"
-                />
-              </div>
-              <button
-                onClick={() => setShowAddExpense(true)}
-                className="flex items-center gap-2 text-sm text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg px-3 py-2 font-medium"
-              >
-                <Plus className="w-3.5 h-3.5" /> Add Expense
-              </button>
-            </div>
-
-            {/* Expenses Analytics Charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-              {/* Expenses by Category - Pie Chart */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-                <h3 className="text-sm font-semibold text-slate-800 mb-1">Expenses by Category</h3>
-                <p className="text-xs text-slate-400 mb-4">Spending distribution across categories</p>
-                {(() => {
-                  const categoryExpenses = expenses.reduce((acc: Record<string, number>, expense) => {
-                    const category = expense.category ?? 'Uncategorized';
-                    const amount = Number(expense.amount ?? 0);
-                    acc[category] = (acc[category] || 0) + amount;
-                    return acc;
-                  }, {});
-                  const chartData = Object.entries(categoryExpenses)
-                    .map(([name, value]) => ({ name, value }))
-                    .sort((a, b) => b.value - a.value);
-                  const COLORS = ['#ef4444', '#f59e0b', '#f97316', '#fb923c', '#fbbf24', '#facc15', '#fde047', '#fef08a'];
-                  
-                  return chartData.length === 0 ? (
-                    <div className="h-[240px] flex items-center justify-center text-slate-400 text-sm">No data yet</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <PieChart>
-                        <Pie
-                          data={chartData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
-                          outerRadius={80}
-                          fill="#8884d8"
-                          dataKey="value"
-                        >
-                          {chartData.map((entry) => (
-                            <Cell key={`cell-${entry.name}`} fill={COLORS[chartData.indexOf(entry) % COLORS.length]} />
-                          ))}
-                        </Pie>
-                        <Tooltip formatter={(v: number) => [`$${v.toLocaleString()}`, 'Amount']} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  );
-                })()}
-              </div>
-
-              {/* Expenses Trend - Bar Chart */}
-              <div className="bg-white rounded-xl border border-slate-100 shadow-sm p-5">
-                <h3 className="text-sm font-semibold text-slate-800 mb-1">Expenses by Category (Bar)</h3>
-                <p className="text-xs text-slate-400 mb-4">Total spending per category</p>
-                {(() => {
-                  const categoryExpenses = expenses.reduce((acc: Record<string, number>, expense) => {
-                    const category = expense.category ?? 'Uncategorized';
-                    const amount = Number(expense.amount ?? 0);
-                    acc[category] = (acc[category] || 0) + amount;
-                    return acc;
-                  }, {});
-                  const chartData = Object.entries(categoryExpenses)
-                    .map(([name, value]) => ({ name, value }))
-                    .sort((a, b) => b.value - a.value);
-                  
-                  return chartData.length === 0 ? (
-                    <div className="h-[240px] flex items-center justify-center text-slate-400 text-sm">No data yet</div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={240}>
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
-                        <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} angle={-45} textAnchor="end" height={80} />
-                        <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} tickFormatter={(v) => `$${(v/1000).toFixed(1)}k`} />
-                        <Tooltip contentStyle={{ border: '1px solid #f1f5f9', borderRadius: '8px', fontSize: 12 }} formatter={(v: number) => [`$${v.toLocaleString()}`, 'Amount']} />
-                        <Bar dataKey="value" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  );
-                })()}
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-slate-100 shadow-sm">
-              {expensesLoading ? (
-                <div className="py-12 text-center text-sm text-slate-400">Loading expenses…</div>
-              ) : (
-                <DataTable
-                  columns={[
-                    { key: 'id', label: 'ID', render: (row) => <span className="font-mono text-xs text-slate-400">{String(row.id ?? '').slice(-8)}</span> },
-                    { key: 'category', label: 'Category', render: (row) => <Badge variant="neutral">{String(row.category ?? '—')}</Badge> },
-                    { key: 'description', label: 'Description', className: 'text-slate-500' },
-                    { key: 'amount', label: 'Amount', render: (row) => <span className="font-semibold text-red-600">-${Number(row.amount ?? 0).toLocaleString()}</span> },
-                    { key: 'expenseDate', label: 'Date', render: (row) => <span className="text-slate-400">{row.expenseDate ? new Date(String(row.expenseDate)).toLocaleDateString() : '—'}</span> },
-                  ]}
-                  data={filteredExpenses as unknown as Record<string, unknown>[]}
-                  emptyMessage="No expenses recorded yet."
                 />
               )}
             </div>
