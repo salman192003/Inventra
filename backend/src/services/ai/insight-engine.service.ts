@@ -121,23 +121,28 @@ export const insightEngineService = {
       prompt: `Analyze these inventory metrics: ${promptContext}. Create actionable business recommendations.`
     });
 
-    // 5. Save to database
-    for (const rec of object.recommendations) {
-      await prisma.recommendation.create({
-        data: {
-          businessId,
-          productId: rec.productId,
-          recommendationType: rec.recommendationType as any,
-          title: rec.title,
-          body: rec.body,
-          priority: rec.priority as any,
-          suggestedQuantity: rec.suggestedQuantity,
-          status: 'pending' // pending review by owner
-        }
-      });
-    }
+    // Fix TypeScript 'unknown' error by casting
+    const result = object as any;
+    
+    // 5. Store Recommendations in Database & Return
+    const recommendations = await Promise.all(
+      result.recommendations.map(async (rec: any) => {
+        return prisma.recommendation.create({
+          data: {
+            businessId,
+            productId: rec.productId,
+            recommendationType: rec.recommendationType as any,
+            title: rec.title,
+            body: rec.body,
+            priority: rec.priority as any,
+            suggestedQuantity: rec.suggestedQuantity,
+            status: 'pending' // pending review by owner
+          }
+        });
+      })
+    );
 
-    console.log(`Saved ${object.recommendations.length} new AI recommendations to database.`);
-    return object;
+    console.log(`Saved ${recommendations.length} new AI recommendations to database.`);
+    return { recommendations };
   }
 };
