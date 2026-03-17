@@ -21,7 +21,7 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGIN
-        value: "*" # Update to your Vercel frontend URL later (e.g. https://inventra.vercel.app)
+        value: https://inventra-salman.vercel.app
       
       # Inter-service Communication
       - key: AI_SERVICE_URL
@@ -41,14 +41,14 @@ services:
       - key: SUPABASE_ANON_KEY
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
-        sync: false
+        generateValue: true # Generates random string if not provided (placeholder)
       - key: AI_SERVICE_API_KEY
-        sync: false
+        value: internal-api-key # Pre-filled with your current dev key
       - key: GEMINI_API_KEY
         sync: false
 
   # --------------------------------------------------------------------------------
-  # 2. AI SERVICE (Node.js - RAG & Logic)
+  # 2. AI SERVICE (Node.js - Logic)
   # --------------------------------------------------------------------------------
   - type: web
     name: inventra-ai-service
@@ -65,9 +65,7 @@ services:
       
       # Secrets (Fill in Dashboard)
       - key: API_KEY
-        sync: false # Must match AI_SERVICE_API_KEY from backend
-      - key: OPENAI_API_KEY
-        sync: false
+        value: internal-api-key
 
   # --------------------------------------------------------------------------------
   # 3. AI CORE (Python - Forecasting)
