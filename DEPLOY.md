@@ -15,3 +15,9 @@ You can deploy the Inventra frontend directly to Vercel with one click.
     *   `NEXT_PUBLIC_SUPABASE_URL`: Your Supabase URL.
     *   `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Your Supabase Anon Key.
 6.  Click **Deploy**.
+
+## Backend Deployment (Optional)
+
+If you are using Vercel for only the Frontend, ensure your backend URLs are correct. 
+  
+If using the Monorepo config (frontend + backend + AI), set the Root Directory to `.` (root) and use the provided `vercel.json`.

@@ -61,4 +61,7 @@ app.use(`${API}/ai`, aiRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
+// app.listen(env.PORT, () => { console.log(`Backend running on ${env.PORT}`); }); 
+// ^-- REMOVE or CONDITIONALize this in index.ts, not app.ts
+// Ensure index.ts exports the app or serverless handler.
 export default app;

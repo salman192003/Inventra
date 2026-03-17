@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "frontend/package.json",
+      "use": "@vercel/next"
+    },
+    {
+      "src": "backend/src/index.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "ai-service/src/index.ts",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "ai-core/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/v1/(.*)",
+      "dest": "/backend/src/index.ts"
+    },
+    {
+      "src": "/ai-service/(.*)",
+      "dest": "/ai-service/src/index.ts"
+    },
+    {
+      "src": "/ai-core/(.*)",
+      "dest": "/ai-core/main.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
+    }
+  ]
+}
