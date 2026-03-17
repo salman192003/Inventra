@@ -12,10 +12,6 @@
     {
       "src": "ai-service/src/index.ts",
       "use": "@vercel/node"
-    },
-    {
-      "src": "ai-core/main.py",
-      "use": "@vercel/python"
     }
   ],
   "routes": [
@@ -26,10 +22,6 @@
     {
       "src": "/ai-service/(.*)",
       "dest": "/ai-service/src/index.ts"
-    },
-    {
-      "src": "/ai-core/(.*)",
-      "dest": "/ai-core/main.py"
     },
     {
       "src": "/(.*)",
